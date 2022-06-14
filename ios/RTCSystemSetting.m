@@ -45,7 +45,10 @@
 -(instancetype)init{
     self = [super init];
     if(self){
-        [self addVolumeListener];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                         selector:@selector(addVolumeListener:)
+                                             name:UIApplicationDidBecomeActiveNotification
+                                           object:nil];
 #ifdef BLUETOOTH
         cb = [[CBCentralManager alloc] initWithDelegate:nil queue:nil options:@{CBCentralManagerOptionShowPowerAlertKey: @NO}];
 #endif
@@ -67,6 +70,30 @@
         if ([view.class.description isEqualToString:@"MPVolumeSlider"]){
             volumeSlider = (UISlider*)view;
             break;
+        }
+    }
+}
+
+- (void)addVolumeListener:(NSNotification *)notification {
+        NSLog(@"AddVolumeListener");
+        AVAudioSession* audioSession = [AVAudioSession sharedInstance];
+
+        [audioSession setActive:YES error:nil];
+        [audioSession addObserver:self
+                       forKeyPath:@"outputVolume"
+                          options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld
+                          context:nil];
+}
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context
+{
+
+    if (object == [AVAudioSession sharedInstance] && [keyPath isEqualToString:@"outputVolume"]) {
+        float newValue = [change[@"new"] floatValue];
+        if (skipSetVolumeCount == 0 && hasListeners) {
+                [self sendEventWithName:@"EventVolume" body:@{@"value": [NSNumber numberWithFloat:newValue]}];
+        }
+        if (skipSetVolumeCount > 0) {
+                skipSetVolumeCount--;
         }
     }
 }
